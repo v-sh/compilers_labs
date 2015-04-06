@@ -3,13 +3,45 @@ require 'graphviz'
 class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
   class State
     attr_accessor :links
+    attr_accessor :back_links #for minimisation algorithm
+    attr_accessor :back_links_added
     attr_accessor :mark
+
+    #used in eps removing alg
+    attr_accessor :from_states
+    attr_accessor :marked
     def initialize(links = [])
       @links = links
+      @back_links = []
     end
 
     def ==(other)
       self.object_id == other.object_id
+    end
+
+    def eps_closure
+      states = [self]
+      begin
+        new_states = states.map do |s|
+          s.links.select{|l| l.first == :eps}.map{|l| l[1]}
+        end.flatten.select do |s|
+          !states.include? s
+        end.uniq
+        states += new_states
+      end while !new_states.empty?
+      states
+    end
+
+    def char_nexts(char)
+      links.select{|l| l.first == char}.map{|l| l[1]}.uniq
+    end
+
+    def label
+      if from_states
+        from_states.map(&:label).join(",")
+      else
+        mark
+      end
     end
   end
 
@@ -17,6 +49,103 @@ class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
     self.end_states.each do |state|
       state.links << [term, new_end]
     end
+  end
+
+  def char_nexts(states, char)
+    states.map{|state| state.char_nexts char}.flatten.uniq
+  end
+
+  def eps_closure(states)
+    states.map{|state| state.eps_closure}.flatten.uniq
+  end
+
+  def to_dfa
+    def make_state(closure)
+      s = State.new
+      s.from_states = closure
+      s
+    end
+    a = self.class.new
+    new_states = [make_state(start_state.eps_closure)]
+    a.start_state = new_states.first
+    while state = new_states.select{|s| !s.marked}.first
+      state.marked = true
+      self.class.terminals.each do |terminal|
+        term_state = eps_closure(char_nexts(state.from_states, terminal))
+        term_state = make_state term_state
+        if existed_state = new_states.find{|new_state| new_state.from_states == term_state.from_states}
+          term_state = existed_state
+        else
+          new_states << term_state
+        end
+        state.links << [terminal, term_state]
+      end
+    end
+    a.end_states = new_states.select{|state| !state.from_states.select{|state| end_states.include? state}.empty?}
+    a
+  end
+
+  def states
+    states = Set[self.start_state]
+    begin
+      new_states = states.map{|state| state.links.map{|link| link[1]}}.flatten.to_set - states
+      states += new_states
+    end until new_states.empty?
+    states
+  end
+
+  def fill_back_links(state)
+    return if state.back_links_added
+    state.back_links_added = true
+    state.links.each do |link|
+      link[1].back_links << [link[0], state]
+      fill_back_links(link[1])
+    end
+  end
+
+  def get_equty_states
+    # alg 2.6 aho ulman theory of sintax analizing
+    fill_back_links(self.start_state)
+    @classes = [self.end_states.to_set, self.states - self.end_states.to_set]
+    def pi_j_a(j, a)
+      @classes[j].select{|state| !state.back_links.select{|link| link[0] == a}.empty?}
+    end
+
+    @indexes = self.class.terminals.map do |a|
+      if pi_j_a(0, a).count <= pi_j_a(1, a).count
+        {a => Set[0]}
+      else
+        {a => Set[1]}
+      end
+    end.reduce(:merge)
+
+    def get_index
+      @indexes.find{|k,v| !v.empty?} || [nil, nil]
+    end
+    #binding.pry
+    while (a, i = get_index).first
+      i = i.first
+      @indexes[a].delete(i)
+      (0..@classes.count-1).select do |a|
+      end.each do |j|
+        pi_j_1 = @classes[i].map do |state|
+          state.back_links.select{|link| link[0] == a && @classes[j].include?(link[1])}
+        end.reduce(&:+).map{|link| link[1]}.to_set
+        continue if pi_j_1.empty?
+        pi_j_2 = @classes[j] - pi_j_1
+        @classes[j] = pi_j_1
+        @classes << pi_j_2
+        self.class.terminals.each do |a|
+          @indexes[a] = if !@indexes.include?(j) && pi_j_a(j,a).count > 0 && pi_j_a(j,a).count <= pi_j_a(@classes.count - 1, a)
+                         @indexes[a] + Set[j]
+                        else
+                         @indexes[a] + Set[@classes.count - 1]
+                        end
+        end
+      end
+    end
+
+    @classes
   end
 
   def visualize
@@ -33,7 +162,7 @@ class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
       
       nodes = states.each_with_index.map do |state, i|
         state.mark = i
-        g.add_nodes("#{i}")
+        g.add_nodes("#{state.label}")
       end
 
       states.each_with_index do |state, i|
@@ -97,8 +226,12 @@ class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
       a
     end
 
+    def terminals
+      ('a'..'z')
+    end
+
     def terminal?(s)
-      ('a'..'z').include? s
+      terminals.include? s
     end
 
     def regex_to_nfa(regex)
@@ -156,6 +289,21 @@ class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
       terms
     end
 
+    def group_iter terms
+      res = []
+      cur_term = ""
+      terms.each do |term|
+        if term == '*'
+          cur_term += term
+        else
+          res << cur_term if cur_term != ""
+          cur_term = term
+        end
+      end
+      res << cur_term
+      res
+    end
+
     def parse_sum(regex)
       terms = parse_brackets regex
       if plus_i = terms.find_index('+')
@@ -167,7 +315,8 @@ class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
 
     def parse_concat(regex)
       terms = parse_brackets regex
-      if !operation?(terms[0]) && !operation?(terms[1])
+      terms = group_iter terms
+      if terms.count > 1 && !operation?(terms[0]) && !operation?(terms[1])
         op1 = terms[0]
         op2 = terms[1..-1].join
         return op1, op2
