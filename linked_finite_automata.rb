@@ -38,7 +38,7 @@ class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
 
     def label
       if from_states
-        from_states.map(&:label).join(",")
+        "(" + from_states.map(&:label).join(",") + ")"
       else
         mark
       end
@@ -107,6 +107,8 @@ class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
     # alg 2.6 aho ulman theory of sintax analizing
     fill_back_links(self.start_state)
     @classes = [self.end_states.to_set, self.states - self.end_states.to_set]
+
+    #all j class states, in what we can't go by a
     def pi_j_a(j, a)
       @classes[j].select{|state| !state.back_links.select{|link| link[0] == a}.empty?}
     end
@@ -125,8 +127,11 @@ class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
     #binding.pry
     while (a, i = get_index).first
       i = i.first
+      pi = @classes[i]
       @indexes[a].delete(i)
-      (0..@classes.count-1).select do |a|
+      (0..@classes.count-1).select do |j|
+        pj = @classes[j]
+        ! pj.select{|q| !q.links.select{|l| l[0] == a && pi.include?(l[1]) }.empty? }.empty?
       end.each do |j|
         pi_j_1 = @classes[i].map do |state|
           state.back_links.select{|link| link[0] == a && @classes[j].include?(link[1])}
@@ -134,18 +139,44 @@ class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
         continue if pi_j_1.empty?
         pi_j_2 = @classes[j] - pi_j_1
         @classes[j] = pi_j_1
-        @classes << pi_j_2
-        self.class.terminals.each do |a|
-          @indexes[a] = if !@indexes.include?(j) && pi_j_a(j,a).count > 0 && pi_j_a(j,a).count <= pi_j_a(@classes.count - 1, a)
-                         @indexes[a] + Set[j]
-                        else
-                         @indexes[a] + Set[@classes.count - 1]
-                        end
+        unless pi_j_2.empty?
+          @classes << pi_j_2
+          self.class.terminals.each do |a|
+            @indexes[a] = if !@indexes.include?(j) && pi_j_a(j,a).count > 0 && pi_j_a(j,a).count <= pi_j_a(@classes.count - 1, a).count
+                            @indexes[a] + Set[j]
+                          else
+                            @indexes[a] + Set[@classes.count - 1]
+                          end
+          end
         end
       end
     end
 
     @classes
+  end
+
+  def to_canonical
+    def make_state(from_states)
+      s = State.new
+      s.from_states = from_states
+      s
+    end
+    a = self.class.new
+    new_states = self.get_equty_states.map{|x| make_state(x)}
+    a.start_state = new_states.find{|x| x.from_states.include? self.start_state}
+    new_states.each do |new_state|
+      new_state.from_states.each do |old_state|
+        old_state.links.each do |terminal, l_state|
+          unless new_state.links.find{|l| l[0] == terminal}
+            new_l_state = new_states.find{|s| s.from_states.include? l_state }
+            new_state.links << [terminal, new_l_state]
+          end
+        end
+      end
+    end
+    a.end_states = new_states.select{|new_state| !new_state.from_states.select{|fs| self.end_states.include? fs}.empty?}
+
+    a
   end
 
   def visualize
@@ -162,7 +193,7 @@ class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
       
       nodes = states.each_with_index.map do |state, i|
         state.mark = i
-        g.add_nodes("#{state.label}")
+        g.add_nodes("#{state.label}#{end_states.include?(state)?'end':''}")
       end
 
       states.each_with_index do |state, i|
@@ -175,9 +206,18 @@ class LinkedFiniteAutomata < Struct.new(:start_state, :end_states)
           edge[:label] = mark
         end
       end
-    }.output( :png => "temp.png" )
-    `eog temp.png`
-    `rm temp.png`
+    }.output( pdf: "temp.pdf" )
+    `evince temp.pdf`
+    `rm temp.pdf`
+  end
+
+  def test_string(s)
+    active_state = start_state
+    s.each_char do |terminal|
+      puts "parse terminal = #{terminal}"
+      active_state = active_state.links.find{|l| l[0] == terminal}[1]
+    end
+    end_states.include? active_state
   end
   
   class << self
