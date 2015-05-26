@@ -2,7 +2,7 @@ require_relative 'linked_finite_automata'
 require 'pry'
 require 'pry-nav'
 
-a = LinkedFiniteAutomata::regex_to_nfa("(abc*+cd+a)*(a+b+c)")
+a = LinkedFiniteAutomata::regex_to_nfa("(a+b)*abb")
 a.visualize
 b = a.to_dfa
 b.visualize

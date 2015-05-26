@@ -1,0 +1,17 @@
+terminals: [a, b]
+nonterminals: [S, A, B, C, D]
+start: S
+rules:
+  - from: [S]
+    to: [A, B]
+  - from: [A]
+    to: [a]
+  - from: [A]
+    to: [b]
+  - from: [B]
+    to: [A, C]
+  - from: [C]
+    to: [D]
+  - from: [D]
+    to: [a]
+      
