@@ -5,7 +5,7 @@ require 'pry'
 require 'pry-nav'
 
 def make_table(a, g)
-  t = a.each_char.map do |x|
+  t = a.each.map do |x|
     [
       g["rules"].select do |rule|
         rule["to"].count == 1 &&
@@ -32,7 +32,7 @@ def make_table(a, g)
             t[i][k].keys.include?(b) && t[i + k + 1][j - k - 1].keys.include?(c)
           end
         }
-      end.select{|h| h.values.any? }.reduce(:merge)
+      end.select{|h| h.values.any? }.reduce(:merge) || Hash.new
     end
   end
 
@@ -59,9 +59,9 @@ def get_left_gen(a, t, i, j)
   end
 end
 
-g = YAML.load(File.open('input.yml'))
+g = YAML.load(File.open('g.yml'))
 
-a = gets[0..-2]
+a = gets.split
 
 pp (t = make_table(a,g))
 
