@@ -1,5 +1,5 @@
 terminals: ['<>', '<', '<=', '>', '>=', '+', '-', or, '*', '/', div, mod, and, id, const, ',', '(', ')', not]
-nonterminals: [exp, sign, term, s_exp, add_oper_term, term, mul_oper_factor, s_exp_br, factor, rel_op_s_exp, rel_op, add_oper, mul_oper]
+nonterminals: [exp, sign, term, s_exp, add_oper_term, term, mul_oper_factor, s_exp_br, factor, rel_op_s_exp, rel_op, add_oper, mul_oper, rbr, lbr]
 start: exp
 rules:
   - from: [exp]
@@ -13,7 +13,7 @@ rules:
   - from: [exp]
     to: [const]
   - from: [exp]
-    to: ['(', s_exp_br]
+    to: [lbr, s_exp_br]
   - from: [exp]
     to: [not, factor]
   - from: [exp]
@@ -32,7 +32,7 @@ rules:
   - from: [s_exp]
     to: [const]
   - from: [s_exp]
-    to: ['(', s_exp_br]
+    to: [lbr, s_exp_br]
   - from: [s_exp]
     to: [not, factor]
 
@@ -46,7 +46,7 @@ rules:
   - from: [term]
     to: [const]
   - from: [term]
-    to: ['(', s_exp_br]
+    to: [lbr, s_exp_br]
   - from: [term]
     to: [not, factor]
 
@@ -58,12 +58,12 @@ rules:
   - from: [factor]
     to: [const]
   - from: [factor]
-    to: ['(', s_exp_br]
+    to: [lbr, s_exp_br]
   - from: [factor]
     to: [not, factor]
 
   - from: [s_exp_br]
-    to: [s_exp, ')']
+    to: [s_exp, rbr]
 
   - from: [rel_op]
     to: ['<>']
@@ -98,3 +98,8 @@ rules:
     to: [mod]
   - from: [mul_oper]
     to: [and]
+
+  - from: [lbr]
+    to: ['(']
+  - from: [rbr]
+    to: [')']

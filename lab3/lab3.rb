@@ -20,7 +20,6 @@ def make_table(a, g)
   (1...a.length).each do |j|
     puts "\n"
     pp t
-    
     (0...a.length - j).each do |i|
       t[i][j] = g["nonterminals"].map do |nonterminal|
         { nonterminal => 
